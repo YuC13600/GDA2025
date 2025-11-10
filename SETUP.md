@@ -179,13 +179,36 @@ delete_tokens_after_analysis = false
 - `max_concurrent_downloads`: Number of simultaneous video downloads
 - `max_concurrent_transcriptions`: Number of simultaneous Whisper workers
 
-### 4. Initialize Data Directory
+### 4. Setup External Storage
 
-The data directory structure will be created automatically on first run, but you can create it manually:
+**IMPORTANT**: To avoid excessive SSD wear from frequent video file writes/deletes, store data on an external drive or HDD.
+
+#### Option A: Use External Storage (Recommended)
+
+Mount your external storage and create the data directory:
+
+```bash
+# Replace with your actual mount point
+EXTERNAL_STORAGE="/media/yuc/YOUR_EXTERNAL_DRIVE"
+
+# Create data directory
+sudo mkdir -p $EXTERNAL_STORAGE/GDA2025/data
+sudo chown $USER:$USER $EXTERNAL_STORAGE/GDA2025/data
+
+# Update config.toml to point to external storage
+# Edit the [data] section:
+# root_dir = "/media/yuc/YOUR_EXTERNAL_DRIVE/GDA2025/data"
+```
+
+#### Option B: Use Local Storage (Not Recommended for SSDs)
+
+If using local storage, create the data directory in the project:
 
 ```bash
 mkdir -p data/{videos,audio,transcripts,tokens,analysis,cache,logs}
 ```
+
+**Note**: The default config.toml is configured for external storage. Adjust the `root_dir` path according to your setup.
 
 ### 5. Download Whisper Models
 

@@ -2,8 +2,8 @@
 # This is the default configuration file. Modify as needed.
 
 [data]
-# Root directory for all data files
-root_dir = "data"
+# Root directory for all data files (on external storage to avoid SSD wear)
+root_dir = "/media/yuc/54d5e942-c7d4-405f-a849-e20bb196ef55/GDA2025/data"
 
 [database]
 # Database file path (relative to data directory or absolute)
