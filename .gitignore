@@ -1,1 +1,25 @@
 *.docx
+CLAUDE.md
+
+# Claude Code local settings
+.claude/
+
+# Rust
+/target/
+Cargo.lock
+
+# Data and logs
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Config overrides (keep default config.toml in repo)
+config.local.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

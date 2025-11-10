@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/shared",
+    "crates/mal-scraper",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["YuC <uivd978985@gmail.com>"]
+license = "GPL-3.0"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json", "gzip"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Configuration
+toml = "0.8"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+once_cell = "1.19"

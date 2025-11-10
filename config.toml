@@ -1,0 +1,58 @@
+# GDA2025 Zipf's Law Analysis Project Configuration
+# This is the default configuration file. Modify as needed.
+
+[data]
+# Root directory for all data files
+root_dir = "data"
+
+[database]
+# Database file path (relative to data directory or absolute)
+path = "jobs.db"
+
+[logging]
+# Log directory path (relative to data directory or absolute)
+log_dir = "logs"
+
+# Default log level: trace, debug, info, warn, error
+default_level = "info"
+
+# Enable console output
+console = true
+
+# Enable file output
+file = true
+
+# Enable JSON formatting for file logs (for machine parsing)
+json_format = false
+
+[mal_scraper]
+# Jikan API base URL
+base_url = "https://api.jikan.moe/v4"
+
+# Minimum items required to process a category
+# Categories with fewer items will be skipped
+min_category_items = 50
+
+# Maximum retries for failed requests
+max_retries = 3
+
+# Retry delay in milliseconds
+retry_delay_ms = 1000
+
+[mal_scraper.rate_limit]
+# Maximum requests per second (conservative: 2.0, Jikan limit: 3.0)
+requests_per_second = 2.0
+
+# Maximum requests per minute (conservative: 50, Jikan limit: 60)
+requests_per_minute = 50
+
+[mal_scraper.cache]
+# Enable caching
+enabled = true
+
+# Cache directory (relative to data directory)
+cache_dir = "cache"
+
+# Cache expiration in seconds (omit for permanent cache)
+# For MAL data, we use permanent cache (no expiration)
+# expiration_seconds = 86400  # Uncomment and set value if you want expiration
