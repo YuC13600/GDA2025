@@ -186,6 +186,23 @@ CREATE TABLE workers (
     FOREIGN KEY (current_job_id) REFERENCES jobs(id)
 );
 
+-- Anime selection cache (Claude Haiku selections)
+-- Caches which anime to download for each MAL ID to avoid repeated API calls
+CREATE TABLE anime_selection_cache (
+    mal_id INTEGER PRIMARY KEY,
+    anime_title TEXT NOT NULL,
+    search_query TEXT NOT NULL,
+    selected_index INTEGER NOT NULL,      -- 1-based index from candidates list
+    selected_title TEXT NOT NULL,         -- The title that was selected
+    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low')),
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (mal_id) REFERENCES anime(mal_id)
+);
+
+CREATE INDEX idx_selection_cache_confidence ON anime_selection_cache(confidence);
+
 -- Triggers for automatic updated_at
 CREATE TRIGGER update_jobs_timestamp
 AFTER UPDATE ON jobs
@@ -392,11 +409,57 @@ impl JobQueue {
         )?;
         Ok(updated)
     }
+
+    /// Get cached anime selection
+    pub fn get_selection(&self, mal_id: u32) -> Result<Option<AnimeSelection>> {
+        let conn = self.conn.lock().unwrap();
+        let selection = conn.query_row(
+            "SELECT selected_index, selected_title, confidence, reason
+             FROM anime_selection_cache WHERE mal_id = ?1",
+            params![mal_id],
+            |row| Ok(AnimeSelection {
+                selected_index: row.get(0)?,
+                selected_title: row.get(1)?,
+                confidence: row.get(2)?,
+                reason: row.get(3)?,
+            })
+        ).optional()?;
+        Ok(selection)
+    }
+
+    /// Cache anime selection
+    pub fn cache_selection(&self, mal_id: u32, selection: AnimeSelection) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO anime_selection_cache
+             (mal_id, anime_title, search_query, selected_index, selected_title, confidence, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                mal_id,
+                selection.anime_title,
+                selection.search_query,
+                selection.selected_index,
+                selection.selected_title,
+                selection.confidence,
+                selection.reason,
+            ],
+        )?;
+        Ok(())
+    }
 }
 
 pub enum FileType {
     Video,
     Audio,
+}
+
+pub struct AnimeSelection {
+    pub selected_index: i32,
+    pub selected_title: String,
+    pub confidence: String,  // "high", "medium", or "low"
+    pub reason: String,
+    pub anime_title: String,
+    pub search_query: String,
 }
 ```
 
@@ -474,6 +537,118 @@ async fn scrape_all_categories(queue: &JobQueue) -> Result<()> {
    - ✅ Failed jobs can be retried without creating duplicates
 
 **Result**: If 50 genres × 50 anime = 2500 entries, but only ~500 unique anime → **5x reduction** in downloads!
+
+---
+
+### Anime Selection Strategy
+
+**Problem**: AllAnime search returns multiple results for each anime (main series, specials, OVAs, recaps). Simple auto-selection (first result) often downloads wrong content.
+
+**Example**:
+- Search for "ACCA: 13-ku Kansatsu-ka" returns:
+  1. "ACCA: 13-ku Kansatsu-ka Specials (6 eps)" ❌
+  2. "ACCA: 13-ku Kansatsu-ka - Regards (1 eps)" ❌
+  3. "ACCA: 13-ku Kansatsu-ka (12 eps)" ✅ Correct!
+
+**Solution**: Claude Haiku pre-selection
+
+**Workflow**:
+
+1. **anime-selector (Phase 3)** - Run once before downloading:
+```rust
+// anime-selector/src/main.rs
+
+async fn select_anime(mal_id: u32, metadata: AnimeMetadata) -> Result<()> {
+    // Check cache first
+    if let Some(selection) = queue.get_selection(mal_id)? {
+        println!("Using cached selection for {}", metadata.title);
+        return Ok(());
+    }
+
+    // Fetch candidates from AllAnime
+    let candidates = get_anime_candidates(&metadata.title)?;
+
+    // Use Claude Haiku to select best match
+    let selection = claude_select(metadata, candidates).await?;
+
+    // Cache the result
+    queue.cache_selection(mal_id, selection)?;
+
+    Ok(())
+}
+
+fn get_anime_candidates(title: &str) -> Result<Vec<String>> {
+    // Call scripts/get_anime_candidates.sh
+    let output = Command::new("zsh")
+        .args(&["scripts/get_anime_candidates.sh", title])
+        .output()?;
+
+    let candidates: Vec<String> = serde_json::from_slice(&output.stdout)?;
+    Ok(candidates)
+}
+
+async fn claude_select(metadata: AnimeMetadata, candidates: Vec<String>) -> Result<AnimeSelection> {
+    // Call scripts/select_anime.py via Python
+    let candidates_json = serde_json::to_string(&candidates)?;
+
+    let output = Command::new("python3")
+        .args(&[
+            "scripts/select_anime.py",
+            "--mal-title", &metadata.title,
+            "--episodes", &metadata.episodes.to_string(),
+            "--year", &metadata.year.to_string(),
+            "--anime-type", &metadata.anime_type,
+            "--candidates", &candidates_json,
+        ])
+        .output()?;
+
+    let result: SelectionResult = serde_json::from_slice(&output.stdout)?;
+
+    Ok(AnimeSelection {
+        selected_index: result.index,
+        selected_title: candidates[result.index - 1].clone(),
+        confidence: result.confidence,
+        reason: result.reason,
+        anime_title: metadata.title,
+        search_query: format!("{}#{}", metadata.title, result.index),
+    })
+}
+```
+
+2. **anime-downloader (Phase 4)** - Reads cached selections:
+```rust
+// anime-downloader/src/main.rs
+
+async fn download_episode(job: Job, queue: &JobQueue) -> Result<()> {
+    // Get cached selection
+    let selection = queue.get_selection(job.mal_id)?
+        .ok_or_else(|| anyhow!("No cached selection for MAL ID {}", job.mal_id))?;
+
+    // Use ani-cli with cached index
+    let output = Command::new("ani-cli")
+        .args(&[
+            "-S", &selection.selected_index.to_string(),  // Use cached index
+            "-e", &format!("{}", job.episode),
+            &job.anime_title
+        ])
+        .output()?;
+
+    // ... handle download
+}
+```
+
+**Benefits**:
+- **Separation of concerns**: Selection and downloading are independent phases
+- **Cost-effective**: Each anime selected once, results cached
+- **Manual review**: Low-confidence selections can be reviewed before downloading
+- **Fail-safe**: If selection fails, job can be retried without re-selecting
+
+**Cost Analysis**:
+- Claude Haiku: ~$0.25 per million input tokens, ~$1.25 per million output tokens
+- Estimated input: ~100 tokens per selection (MAL metadata + candidates)
+- Estimated output: ~50 tokens per selection (JSON response)
+- Cost per selection: ~$0.000225
+- Total for 171,851 anime: ~$38.67
 
 ---
 
@@ -928,5 +1103,5 @@ If you want faster processing (more parallel jobs):
 
 ---
 
-*Last updated: 2025-11-06*
+*Last updated: 2025-11-10*
 *See PLAN.md for overall implementation plan*

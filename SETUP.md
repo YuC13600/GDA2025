@@ -93,19 +93,49 @@ whisper --help
 
 You should see the Whisper CLI help text with Japanese language support listed.
 
-### 5. Animdl (Anime Downloader)
+### 5. ani-cli (Anime Downloader)
 
-Install animdl in the same conda environment:
+Install ani-cli for downloading anime episodes:
 
 ```bash
-conda activate GDA2025
-pip install animdl
+# Install from GitHub
+sudo wget -O /usr/local/bin/ani-cli https://raw.githubusercontent.com/pystardust/ani-cli/master/ani-cli
+sudo chmod +x /usr/local/bin/ani-cli
 ```
 
 **Verify installation:**
 
 ```bash
-animdl --version
+ani-cli -V
+```
+
+### 6. aria2c (Download Utility)
+
+ani-cli requires aria2c for downloading:
+
+```bash
+sudo apt install aria2
+```
+
+**Verify installation:**
+
+```bash
+aria2c --version
+```
+
+### 7. Anthropic Python SDK
+
+Install the Anthropic SDK for Claude API access (used for intelligent anime selection):
+
+```bash
+conda activate GDA2025
+pip install anthropic
+```
+
+**Verify installation:**
+
+```bash
+python -c "import anthropic; print(anthropic.__version__)"
 ```
 
 ## Project Setup
@@ -132,7 +162,13 @@ This will create optimized binaries in `target/release/`:
 
 ### 3. Configuration
 
-Create a `config.toml` file in the project root (or use the provided default):
+Copy the example configuration and customize it:
+
+```bash
+cp config.example.toml config.toml
+```
+
+Edit `config.toml` to set your configuration:
 
 ```toml
 # Data directory for all files
@@ -170,7 +206,14 @@ delete_video_after_transcription = true
 delete_audio_after_transcription = true
 delete_transcript_after_tokenization = false
 delete_tokens_after_analysis = false
+
+[anthropic]
+# Anthropic API key for Claude Haiku anime selection
+# Get your API key from: https://console.anthropic.com/
+api_key = "sk-ant-api03-YOUR-API-KEY-HERE"
 ```
+
+**IMPORTANT**: Add your Anthropic API key to enable intelligent anime selection.
 
 **Configuration Notes:**
 - `hard_limit_gb`: Maximum disk space allowed (safety limit)
@@ -233,7 +276,7 @@ Available models (in order of size/accuracy):
 Run the MAL scraper to populate the job queue:
 
 ```bash
-RUST_LOG=info cargo run --release -p mal-scraper -- --config config.toml
+RUST_LOG=info cargo run --release -p mal-scraper
 ```
 
 This will:
@@ -241,40 +284,77 @@ This will:
 - Cache results locally
 - Populate the SQLite database with jobs
 
-### Step 2: Download Episodes
+### Step 2: Pre-select Anime Titles (Recommended)
 
-Start the anime downloader:
+Use Claude Haiku to intelligently select correct anime titles before downloading:
 
 ```bash
-RUST_LOG=info cargo run --release -p anime-downloader -- --config config.toml --workers 5
+# Activate conda environment for Python scripts
+conda activate GDA2025
+
+# Export API key (if not in config.toml)
+export ANTHROPIC_API_KEY="your-key-here"
+
+# Run anime selector
+RUST_LOG=info cargo run --release -p anime-selector -- --workers 5
+```
+
+This will:
+- Query AllAnime API for each anime
+- Use Claude Haiku to select main series vs specials/OVAs
+- Cache selections in `anime_selection_cache` table
+- Generate report with confidence levels
+
+**Review low-confidence selections:**
+
+```bash
+sqlite3 data/jobs.db "SELECT mal_id, anime_title, selected_title, confidence, reason FROM anime_selection_cache WHERE confidence='low'"
+```
+
+**Manual correction (if needed):**
+
+```bash
+sqlite3 data/jobs.db "UPDATE anime_selection_cache SET selected_index=2, selected_title='Correct Title' WHERE mal_id=12345"
+```
+
+### Step 3: Download Episodes
+
+Start the anime downloader (uses cached selections):
+
+```bash
+RUST_LOG=info cargo run --release -p anime-downloader -- --workers 5
 ```
 
 Options:
 - `--workers N`: Number of concurrent download workers (default: 5)
 - `--dry-run`: Test mode without actual downloads
+- `--anime-id N`: Download only specific anime (for testing)
 
 The downloader will:
+- Read selections from `anime_selection_cache`
+- Use ani-cli with correct anime index
 - Monitor disk space continuously
-- Pause downloads when disk exceeds 230GB
-- Resume when disk drops below 200GB
+- Pause downloads when disk exceeds threshold
 
-### Step 3: Transcribe Audio
+### Step 4: Transcribe Audio
 
 Start the transcriber (can run concurrently with downloader):
 
 ```bash
+# Ensure conda environment is activated
 conda activate GDA2025
-RUST_LOG=info cargo run --release -p transcriber -- --config config.toml --workers 2 --model base
+
+RUST_LOG=info cargo run --release -p transcriber -- --workers 2 --model base
 ```
 
 Options:
 - `--workers N`: Number of concurrent transcription workers (default: 2)
-- `--model NAME`: Whisper model to use (default: base)
+- `--model NAME`: Whisper model to use (tiny/base/small/medium/large)
 - `--dry-run`: Test mode without actual transcription
 
 The transcriber will:
 - Extract audio from videos using FFmpeg
-- Transcribe using Whisper
+- Transcribe using Whisper (Japanese language)
 - Immediately delete video and audio files to free space
 - Update job status in database
 

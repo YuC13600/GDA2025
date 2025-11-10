@@ -9,7 +9,8 @@ A modular Rust/Python hybrid system for analyzing Zipf's law in Japanese anime (
 | Component | Language | Primary Libraries | Rationale |
 |-----------|----------|-------------------|-----------|
 | MAL Scraper | **Rust** | `jikan-rs`, `reqwest`, `scraper` | Jikan API wrapper available |
-| Anime Downloader | **Rust wrapper** | `animdl` (via subprocess) | Best automation support |
+| Anime Selector | **Rust + Python** | `ani-cli` (via subprocess), `anthropic` (Python) | Claude Haiku for intelligent title matching |
+| Anime Downloader | **Rust wrapper** | `ani-cli` (via subprocess) | Fast, reliable, Cloudflare bypass |
 | Speech-to-Text | **Rust** | `whisper-rs` | Native Rust bindings available |
 | Tokenization | **Rust** | `vibrato` | Pure Rust, faster than MeCab CLI |
 | Statistical Analysis | **Rust** | `polars`, `statrs`, `ndarray` | Excellent performance |
@@ -17,7 +18,7 @@ A modular Rust/Python hybrid system for analyzing Zipf's law in Japanese anime (
 | TUI Monitor | **Rust** | `ratatui`, `crossterm` | Modern TUI framework |
 | Job Queue | **Rust** | SQLite via `rusqlite` | Lightweight, persistent |
 
-**Python dependencies**: Minimal - only `animdl` (pip install) and optional visualization tools
+**Python dependencies**: `anthropic` (Claude API), `openai-whisper`, optional visualization tools
 
 ## Architecture Design
 
@@ -42,26 +43,32 @@ anime-zipf-analysis/
 │   │   │   └── scraper.rs      # Fallback web scraping
 │   │   └── Cargo.toml
 │   │
-│   ├── anime-downloader/       # CLI Tool #2
+│   ├── anime-selector/         # CLI Tool #2 (Pre-selection)
 │   │   ├── src/
-│   │   │   ├── main.rs
-│   │   │   └── animdl.rs       # animdl subprocess wrapper
+│   │   │   ├── main.rs         # Entry point
+│   │   │   └── selector.rs     # Claude Haiku selection logic
 │   │   └── Cargo.toml
 │   │
-│   ├── transcriber/            # CLI Tool #3
+│   ├── anime-downloader/       # CLI Tool #3
+│   │   ├── src/
+│   │   │   ├── main.rs
+│   │   │   └── anicli.rs       # ani-cli subprocess wrapper
+│   │   └── Cargo.toml
+│   │
+│   ├── transcriber/            # CLI Tool #4
 │   │   ├── src/
 │   │   │   ├── main.rs
 │   │   │   ├── whisper.rs      # whisper-rs integration
 │   │   │   └── audio.rs        # Audio extraction
 │   │   └── Cargo.toml
 │   │
-│   ├── tokenizer/              # CLI Tool #4
+│   ├── tokenizer/              # CLI Tool #5
 │   │   ├── src/
 │   │   │   ├── main.rs
 │   │   │   └── vibrato.rs      # vibrato tokenization
 │   │   └── Cargo.toml
 │   │
-│   ├── analyzer/               # CLI Tool #5
+│   ├── analyzer/               # CLI Tool #6
 │   │   ├── src/
 │   │   │   ├── main.rs
 │   │   │   ├── statistics.rs   # Zipf's law fitting
@@ -81,6 +88,8 @@ anime-zipf-analysis/
 ├── data/                       # Data directory (see details below)
 ├── environment.yml             # Conda environment
 └── scripts/
+    ├── get_anime_candidates.sh # Fetch candidates from AllAnime API
+    ├── select_anime.py         # Claude Haiku anime selection
     └── visualize.py            # Optional Python visualization
 ```
 
@@ -140,15 +149,46 @@ anime-zipf-analysis/
 
 ---
 
-### Phase 3: Anime Downloader (CLI Tool #2)
-**Goal**: Download anime episodes using animdl
+### Phase 3: Anime Selector (CLI Tool #2)
+**Goal**: Pre-select correct anime titles using Claude Haiku before downloading
 
 **Tasks**:
-- Implement animdl CLI wrapper:
+- Query AllAnime API for each anime in database
+- Use Claude Haiku (via Python SDK) to intelligently select:
+  - Main series vs Specials/OVAs/Recaps
+  - Match based on episode count, year, type
+  - Return confidence level (high/medium/low)
+- Cache selections in `anime_selection_cache` table
+- Generate report with low-confidence selections for manual review
+- Implement bash script to fetch candidates from AllAnime:
+  - Use correct referer header to bypass Cloudflare
+  - Return JSON array of candidate titles with episode counts
+- Implement Python script for Claude selection:
+  - Call Claude Haiku API with MAL metadata and candidates
+  - Parse JSON response with index, confidence, reason
+
+**Deliverables**:
+- `anime-selector` binary
+- `scripts/get_anime_candidates.sh` - AllAnime API query script
+- `scripts/select_anime.py` - Claude Haiku selection script
+- Populated `anime_selection_cache` table
+- Selection report with confidence statistics
+
+**Cost Estimate**: ~$0.000225 per selection, ~$38.67 for 171,851 anime
+
+---
+
+### Phase 4: Anime Downloader (CLI Tool #3)
+**Goal**: Download anime episodes using ani-cli with cached selections
+
+**Tasks**:
+- Implement ani-cli CLI wrapper:
   ```rust
-  Command::new("animdl")
-      .args(&["download", title, "--range", episodes, "--auto-select"])
+  Command::new("ani-cli")
+      .args(&["-S", &selected_index, "-e", &episode_range, search_query])
   ```
+- Read selections from `anime_selection_cache` table
+- Use cached index to download correct anime
 - Poll job queue for `Stage::Queued` jobs
 - Download episodes to designated directory
 - Update job status with progress
@@ -161,7 +201,7 @@ anime-zipf-analysis/
 
 ---
 
-### Phase 4: Transcriber (CLI Tool #3)
+### Phase 5: Transcriber (CLI Tool #4)
 **Goal**: Convert audio to Japanese text using Whisper
 
 **Tasks**:
@@ -187,7 +227,7 @@ anime-zipf-analysis/
 
 ---
 
-### Phase 5: Tokenizer (CLI Tool #4)
+### Phase 6: Tokenizer (CLI Tool #5)
 **Goal**: Tokenize Japanese text into words
 
 **Tasks**:
@@ -208,7 +248,7 @@ anime-zipf-analysis/
 
 ---
 
-### Phase 6: Analyzer (CLI Tool #5)
+### Phase 7: Analyzer (CLI Tool #6)
 **Goal**: Statistical analysis and Zipf's law validation
 
 **Tasks**:
@@ -238,7 +278,7 @@ anime-zipf-analysis/
 
 ---
 
-### Phase 7: Scheduler TUI (Monitoring Application)
+### Phase 8: Scheduler TUI (Monitoring Application)
 **Goal**: Real-time job monitoring and scheduling
 
 **Tasks**:
@@ -264,7 +304,7 @@ anime-zipf-analysis/
 
 ---
 
-### Phase 8: Visualization (Optional Python)
+### Phase 9: Visualization (Optional Python)
 **Goal**: Publication-quality figures
 
 **Tasks** (if Rust plotly insufficient):
@@ -305,28 +345,41 @@ For detailed specifications of the job queue system and file structure, see **[T
 
 ## Key Design Decisions
 
-### 1. Why animdl over ani-cli?
-- **ani-cli**: Bash script, difficult to automate (interactive prompts, no structured output)
-- **animdl**: Python CLI with better programmatic interface, `--auto-select` flag, reliable exit codes
+### 1. Why ani-cli over animdl?
+- **animdl**: Python-based, but no longer actively maintained
+- **ani-cli**: Shell script with active community, reliable Cloudflare bypass, faster
+- **Claude Haiku pre-selection**: Solves ani-cli's title matching problem intelligently
+  - Distinguishes main series from specials/OVAs/recaps
+  - Cost-effective (~$0.000225 per selection)
+  - Cacheable results prevent repeated API calls
 
-### 2. Why Rust for everything?
+### 2. Why Claude Haiku for anime selection?
+- **Problem**: AllAnime search returns multiple results (main series, specials, OVAs)
+- **Solution**: Use Claude Haiku to intelligently select based on MAL metadata
+- **Benefits**:
+  - High accuracy with episode count and year matching
+  - Provides confidence levels for manual review
+  - One-time cost (results cached in database)
+  - Separates selection phase from download phase
+
+### 3. Why Rust for everything?
 - **Performance**: 10-100x faster than Python (especially polars vs pandas)
 - **Type safety**: Catch errors at compile time
 - **Single binary deployment**: No Python dependencies except animdl
 - **Async**: Tokio for concurrent processing
 
-### 3. Why SQLite for job queue?
+### 4. Why SQLite for job queue?
 - **Lightweight**: Single file, no server needed
 - **ACID guarantees**: Reliable job state
 - **Concurrency**: Good enough for single-machine pipeline (100-1000 jobs/sec)
 - **Upgrade path**: Can migrate to Redis later if needed
 
-### 4. Why vibrato over MeCab CLI?
+### 5. Why vibrato over MeCab CLI?
 - **Pure Rust**: No system dependencies
 - **Performance**: Faster than MeCab (cache-efficient)
 - **Deployment**: Single binary, easier distribution
 
-### 5. Why ratatui for TUI?
+### 6. Why ratatui for TUI?
 - **Modern**: Active development (tui-rs successor)
 - **Flexible**: Powerful layout system
 - **Async-friendly**: Works seamlessly with tokio
@@ -342,13 +395,13 @@ For detailed specifications of the job queue system and file structure, see **[T
 - Consider `faster-whisper` backend if quality issues persist
 - Validate transcripts with heuristics (detect "Thank you for watching" loops)
 
-### Challenge 2: animdl Output Parsing
-**Issue**: No structured JSON output from animdl CLI
+### Challenge 2: Anime Title Matching
+**Issue**: ani-cli search returns multiple results (main series, specials, OVAs)
 **Mitigation**:
-- Parse stdout with regex patterns
-- Monitor exit codes carefully
-- Request `--json` flag from maintainers (future)
-- Implement robust error detection
+- Use Claude Haiku for intelligent pre-selection
+- Cache selections to avoid repeated API calls
+- Provide confidence levels for manual review
+- Separate selection phase from download phase
 
 ### Challenge 3: MAL Rate Limiting
 **Issue**: Direct scraping may hit rate limits
@@ -396,7 +449,9 @@ For detailed specifications of the job queue system and file structure, see **[T
 ## References
 
 - **Jikan API**: https://docs.api.jikan.moe/
-- **animdl**: https://github.com/justfoolingaround/animdl
+- **ani-cli**: https://github.com/pystardust/ani-cli
+- **Anthropic Claude**: https://docs.anthropic.com/
+- **AllAnime API**: https://allanime.day (via ani-cli)
 - **whisper-rs**: https://codeberg.org/tazz4843/whisper-rs
 - **vibrato**: https://github.com/daac-tools/vibrato
 - **polars**: https://pola.rs/
@@ -404,5 +459,5 @@ For detailed specifications of the job queue system and file structure, see **[T
 
 ---
 
-*Last updated: 2025-11-06*
-*Status: Planning phase - ready for implementation*
+*Last updated: 2025-11-10*
+*Status: Phases 1-4 complete, Phase 5 (anime-selector) in progress*
