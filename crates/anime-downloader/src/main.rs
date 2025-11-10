@@ -33,6 +33,10 @@ struct Args {
     /// Dry run (don't actually download)
     #[arg(long)]
     dry_run: bool,
+
+    /// Only download episodes for this specific anime (by MAL ID)
+    #[arg(long)]
+    anime_id: Option<u32>,
 }
 
 #[tokio::main]
@@ -140,6 +144,7 @@ async fn main() -> Result<()> {
             disk_monitor.clone(),
             data_paths.clone(),
             args.dry_run,
+            args.anime_id,
         );
         downloaders.push(downloader);
     }

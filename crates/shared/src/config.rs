@@ -25,6 +25,10 @@ pub struct Config {
     /// Disk management settings
     #[serde(default)]
     pub disk_management: DiskManagementConfig,
+
+    /// Anthropic API settings
+    #[serde(default)]
+    pub anthropic: AnthropicConfig,
 }
 
 /// Data directory configuration
@@ -149,6 +153,21 @@ pub struct CleanupConfig {
     pub delete_tokens_after_analysis: bool,
 }
 
+/// Anthropic API configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnthropicConfig {
+    /// Anthropic API key for Claude Haiku anime selection
+    pub api_key: String,
+}
+
+impl Default for AnthropicConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+        }
+    }
+}
+
 impl Default for DiskManagementConfig {
     fn default() -> Self {
         Self {
@@ -207,6 +226,7 @@ impl Default for Config {
                 retry_delay_ms: 1000,
             },
             disk_management: DiskManagementConfig::default(),
+            anthropic: AnthropicConfig::default(),
         }
     }
 }

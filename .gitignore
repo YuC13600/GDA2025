@@ -14,7 +14,8 @@ Cargo.lock
 *.db-shm
 *.db-wal
 
-# Config overrides (keep default config.toml in repo)
+# Config overrides (keep config.example.toml in repo, ignore actual config)
+config.toml
 config.local.toml
 
 # IDE

@@ -1,6 +1,6 @@
 //! Anime downloader implementation.
 //!
-//! Downloads anime episodes using animdl with disk-aware coordination.
+//! Downloads anime episodes using ani-cli with disk-aware coordination.
 
 use anyhow::{Context, Result};
 use shared::{DataPaths, DiskMonitor, Job, JobQueue, JobStage};
@@ -23,6 +23,8 @@ pub struct AnimeDownloader {
     data_paths: DataPaths,
     /// Dry run mode (don't actually download)
     dry_run: bool,
+    /// Filter by specific anime ID (optional)
+    filter_anime_id: Option<u32>,
     /// Number of completed downloads
     completed: usize,
     /// Number of failed downloads
@@ -37,6 +39,7 @@ impl AnimeDownloader {
         disk_monitor: DiskMonitor,
         data_paths: DataPaths,
         dry_run: bool,
+        filter_anime_id: Option<u32>,
     ) -> Self {
         Self {
             worker_id,
@@ -44,6 +47,7 @@ impl AnimeDownloader {
             disk_monitor,
             data_paths,
             dry_run,
+            filter_anime_id,
             completed: 0,
             failed: 0,
         }
@@ -64,17 +68,33 @@ impl AnimeDownloader {
                 self.wait_for_space().await?;
             }
 
-            // Try to get next job from queue
-            let job = match self.queue.lock().unwrap().dequeue_next(JobStage::Queued) {
-                Ok(job) => job,
-                Err(e) => {
-                    // Check if error is "no jobs available"
-                    let err_msg = format!("{}", e);
-                    if err_msg.contains("No jobs available") {
-                        debug!(worker_id = self.worker_id, "No more jobs in queue");
-                        break;
+            // Try to get next job from queue (with optional anime filter)
+            let job = match self.filter_anime_id {
+                Some(anime_id) => {
+                    match self.queue.lock().unwrap().dequeue_next_filtered(JobStage::Queued, anime_id) {
+                        Ok(job) => job,
+                        Err(e) => {
+                            let err_msg = format!("{}", e);
+                            if err_msg.contains("No jobs available") {
+                                debug!(worker_id = self.worker_id, anime_id = anime_id, "No more jobs for this anime");
+                                break;
+                            }
+                            return Err(e).context("Failed to dequeue job");
+                        }
                     }
-                    return Err(e).context("Failed to dequeue job");
+                }
+                None => {
+                    match self.queue.lock().unwrap().dequeue_next(JobStage::Queued) {
+                        Ok(job) => job,
+                        Err(e) => {
+                            let err_msg = format!("{}", e);
+                            if err_msg.contains("No jobs available") {
+                                debug!(worker_id = self.worker_id, "No more jobs in queue");
+                                break;
+                            }
+                            return Err(e).context("Failed to dequeue job");
+                        }
+                    }
                 }
             };
 
@@ -214,10 +234,13 @@ impl AnimeDownloader {
         Ok(())
     }
 
-    /// Download a single episode using animdl.
+    /// Download a single episode using ani-cli.
     async fn download_episode(&self, job: &Job) -> Result<PathBuf> {
         // Determine output directory
         let output_dir = self.data_paths.video_dir(job.mal_id);
+
+        // Create output directory
+        std::fs::create_dir_all(&output_dir)?;
 
         // Build output filename
         let safe_title = sanitize_filename(&job.anime_title);
@@ -254,34 +277,62 @@ impl AnimeDownloader {
             anime_title = %job.anime_title,
             episode = job.episode,
             output_path = %output_path.display(),
-            "Starting download with animdl"
+            "Starting download with ani-cli"
         );
 
-        // Build animdl command
-        // animdl download "anime title" --range episode_num --auto-select --quality best
-        let status = Command::new("animdl")
-            .arg("download")
-            .arg(&job.anime_title)
-            .arg("--range")
-            .arg(format!("{}", job.episode))
-            .arg("--auto-select")
-            .arg("--quality")
-            .arg("best")
-            .arg("--output")
-            .arg(&output_dir)
+        // Get list of existing files before download
+        let before_files: std::collections::HashSet<_> = std::fs::read_dir(&output_dir)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+
+        // Build ani-cli command
+        // ani-cli -d -e episode_num -S 1 "anime title"
+        // Note: ani-cli downloads to current directory, so we need to change directory first
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "cd '{}' && ani-cli -d -e {} -S 1 '{}'",
+                output_dir.display(),
+                job.episode,
+                job.anime_title
+            ))
             .status()
-            .context("Failed to execute animdl command")?;
+            .context("Failed to execute ani-cli command")?;
 
         if !status.success() {
             anyhow::bail!(
-                "animdl failed with exit code: {:?}",
+                "ani-cli failed with exit code: {:?}",
                 status.code().unwrap_or(-1)
             );
         }
 
-        // Verify file was created
-        if !output_path.exists() {
-            anyhow::bail!("Video file was not created: {}", output_path.display());
+        // Find newly created .mp4 files
+        let after_files: Vec<_> = std::fs::read_dir(&output_dir)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension().and_then(|s| s.to_str()) == Some("mp4")
+                    && !before_files.contains(p)
+            })
+            .collect();
+
+        if after_files.is_empty() {
+            anyhow::bail!("No video file was created by ani-cli in {}", output_dir.display());
+        }
+
+        // Use the first new file (there should only be one)
+        let downloaded_file = &after_files[0];
+
+        // Rename to our expected format if needed
+        if downloaded_file != &output_path {
+            info!(
+                job_id = job.id,
+                from = %downloaded_file.display(),
+                to = %output_path.display(),
+                "Renaming downloaded file"
+            );
+            std::fs::rename(downloaded_file, &output_path)?;
         }
 
         Ok(output_path)

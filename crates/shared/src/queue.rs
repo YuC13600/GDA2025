@@ -427,6 +427,47 @@ impl JobQueue {
         }
     }
 
+    /// Dequeue next job from a specific stage, filtered by anime ID
+    ///
+    /// Returns the job immediately, or error if no jobs available
+    pub fn dequeue_next_filtered(&mut self, stage: JobStage, anime_id: u32) -> Result<Job> {
+        let conn = self.db.conn_mut();
+
+        // Start a transaction for atomicity
+        let tx = conn.transaction()?;
+
+        // Find and update the next job for the specific anime
+        let updated = tx.execute(
+            "UPDATE jobs SET stage = ?1, started_at = CURRENT_TIMESTAMP
+             WHERE id = (
+                 SELECT id FROM jobs
+                 WHERE stage = ?2 AND mal_id = ?3
+                 ORDER BY priority DESC, created_at ASC
+                 LIMIT 1
+             )",
+            params![stage.to_string(), stage.to_string(), anime_id],
+        )?;
+
+        if updated == 0 {
+            // No jobs available
+            tx.commit()?;
+            anyhow::bail!("No jobs available in stage {} for anime {}", stage, anime_id);
+        }
+
+        // Fetch the job we just updated
+        let job = tx.query_row(
+            "SELECT * FROM jobs WHERE stage = ?1 AND mal_id = ?2 ORDER BY updated_at DESC LIMIT 1",
+            params![stage.to_string(), anime_id],
+            row_to_job,
+        )?;
+
+        tx.commit()?;
+
+        debug!(job_id = job.id, mal_id = anime_id, stage = %stage, "Dequeued job for specific anime");
+
+        Ok(job)
+    }
+
     /// Update job stage
     pub fn update_stage(&mut self, job_id: i64, stage: JobStage) -> Result<()> {
         let conn = self.db.conn_mut();

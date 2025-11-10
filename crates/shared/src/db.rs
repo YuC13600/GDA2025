@@ -34,6 +34,8 @@ impl Database {
             db.create_schema()?;
         } else {
             debug!("Database already exists");
+            // Run migrations for existing databases
+            db.run_migrations()?;
         }
 
         Ok(db)
@@ -84,6 +86,32 @@ impl Database {
             &format!("PRAGMA user_version = {}", version),
             [],
         )?;
+        Ok(())
+    }
+
+    /// Run migrations for existing databases
+    fn run_migrations(&mut self) -> Result<()> {
+        // Check if anime_selection_cache table exists
+        if !self.table_exists("anime_selection_cache")? {
+            info!("Running migration: Creating anime_selection_cache table");
+            self.conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS anime_selection_cache (
+                    mal_id INTEGER PRIMARY KEY,
+                    anime_title TEXT NOT NULL,
+                    search_query TEXT NOT NULL,
+                    selected_index INTEGER NOT NULL,
+                    selected_title TEXT NOT NULL,
+                    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low')),
+                    reason TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (mal_id) REFERENCES anime(mal_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_selection_cache_confidence
+                ON anime_selection_cache(confidence);"
+            ).context("Failed to create anime_selection_cache table")?;
+            info!("Migration completed: anime_selection_cache table created");
+        }
+
         Ok(())
     }
 

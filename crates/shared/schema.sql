@@ -176,6 +176,23 @@ CREATE TABLE IF NOT EXISTS workers (
     FOREIGN KEY (current_job_id) REFERENCES jobs(id)
 );
 
+-- Anime selection cache (Claude Haiku selections)
+-- Caches which anime to download for each MAL ID to avoid repeated API calls
+CREATE TABLE IF NOT EXISTS anime_selection_cache (
+    mal_id INTEGER PRIMARY KEY,
+    anime_title TEXT NOT NULL,
+    search_query TEXT NOT NULL,
+    selected_index INTEGER NOT NULL,      -- 1-based index from candidates list
+    selected_title TEXT NOT NULL,         -- The title that was selected
+    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low')),
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (mal_id) REFERENCES anime(mal_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_selection_cache_confidence ON anime_selection_cache(confidence);
+
 -- Triggers for automatic updated_at
 CREATE TRIGGER IF NOT EXISTS update_jobs_timestamp
 AFTER UPDATE ON jobs

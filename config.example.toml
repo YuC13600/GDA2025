@@ -1,5 +1,5 @@
 # GDA2025 Zipf's Law Analysis Project Configuration
-# This is the default configuration file. Modify as needed.
+# This is an example configuration file. Copy to config.toml and modify as needed.
 
 [data]
 # Root directory for all data files (on external storage to avoid SSD wear)
@@ -79,3 +79,8 @@ delete_video_after_transcription = true
 delete_audio_after_transcription = true
 delete_transcript_after_tokenization = false
 delete_tokens_after_analysis = false
+
+[anthropic]
+# Anthropic API key for Claude Haiku anime selection
+# Get your API key from: https://console.anthropic.com/
+api_key = "sk-ant-api03-YOUR-API-KEY-HERE"
