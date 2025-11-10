@@ -42,11 +42,14 @@ impl DataPaths {
 
     // ========== Audio paths (TEMPORARY - auto-deleted) ==========
 
+    /// Get audio directory for an anime
+    pub fn audio_dir(&self, anime_id: u32) -> PathBuf {
+        self.root.join("audio").join(anime_id.to_string())
+    }
+
     /// Get audio file path for an episode
     pub fn audio_file(&self, anime_id: u32, episode: u32) -> PathBuf {
-        self.root
-            .join("audio")
-            .join(anime_id.to_string())
+        self.audio_dir(anime_id)
             .join(format!("ep{:03}.wav", episode))
     }
 

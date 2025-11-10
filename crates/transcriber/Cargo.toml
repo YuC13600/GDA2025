@@ -1,0 +1,37 @@
+[package]
+name = "transcriber"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Workspace crates
+shared = { path = "../shared" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+
+# Regex for hallucination detection
+regex = "1.10"
+
+[[bin]]
+name = "transcriber"
+path = "src/main.rs"

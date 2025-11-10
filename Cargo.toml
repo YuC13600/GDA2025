@@ -4,6 +4,7 @@ members = [
     "crates/shared",
     "crates/mal-scraper",
     "crates/anime-downloader",
+    "crates/transcriber",
 ]
 
 [workspace.package]

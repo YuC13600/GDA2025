@@ -497,6 +497,64 @@ impl JobQueue {
         Ok(())
     }
 
+    /// Update job with transcript file information
+    pub fn update_job_with_transcript(
+        &mut self,
+        job_id: i64,
+        transcript_path: std::path::PathBuf,
+        audio_size: u64,
+        transcript_size: u64,
+    ) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET transcript_path = ?1, audio_size_bytes = ?2, transcript_size_bytes = ?3, updated_at = CURRENT_TIMESTAMP WHERE id = ?4",
+            params![
+                transcript_path.to_string_lossy().to_string(),
+                audio_size as i64,
+                transcript_size as i64,
+                job_id
+            ],
+        )?;
+
+        debug!(
+            job_id = job_id,
+            transcript_size_kb = transcript_size / 1_000,
+            audio_size_mb = audio_size / 1_000_000,
+            "Updated job with transcript info"
+        );
+
+        Ok(())
+    }
+
+    /// Mark video file as deleted
+    pub fn mark_video_deleted(&mut self, job_id: i64) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET video_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            params![job_id],
+        )?;
+
+        debug!(job_id = job_id, "Marked video as deleted");
+
+        Ok(())
+    }
+
+    /// Mark audio file as deleted
+    pub fn mark_audio_deleted(&mut self, job_id: i64) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET audio_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            params![job_id],
+        )?;
+
+        debug!(job_id = job_id, "Marked audio as deleted");
+
+        Ok(())
+    }
+
 }
 
 /// Helper: Convert a database row to a Job

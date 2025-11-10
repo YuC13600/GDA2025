@@ -17,7 +17,7 @@ pub mod paths;
 pub mod queue;
 
 // Re-export commonly used types
-pub use config::Config;
+pub use config::{CleanupConfig, Config};
 pub use db::Database;
 pub use disk_monitor::{DiskMonitor, DiskUsage, SpaceBreakdown};
 pub use logging::LogConfig;
