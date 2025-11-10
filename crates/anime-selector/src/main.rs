@@ -112,8 +112,9 @@ async fn main() -> Result<()> {
     let config = Config::from_file(&args.config)
         .with_context(|| format!("Failed to load config from {:?}", args.config))?;
 
-    // Open database
-    let db = Database::open(&config.database.path)
+    // Open database (use database_path() to get correct absolute path)
+    let db_path = config.database_path();
+    let db = Database::open(&db_path)
         .context("Failed to open database")?;
 
     // Review mode: just show low-confidence selections
@@ -189,7 +190,7 @@ async fn process_anime_batch(
 ) -> Result<SelectionStats> {
     let stats = Arc::new(tokio::sync::Mutex::new(SelectionStats::new()));
     let semaphore = Arc::new(Semaphore::new(workers));
-    let db_path = config.database.path.clone();
+    let db_path = config.database_path().to_string_lossy().to_string();
     let api_key = config.anthropic.api_key.clone();
 
     let mut tasks = Vec::new();
@@ -367,7 +368,10 @@ async fn select_with_claude(
 ) -> Result<SelectionResult> {
     let candidates_json = serde_json::to_string(candidates)?;
 
-    let mut cmd = Command::new("python3");
+    // Use conda environment's Python to ensure anthropic is available
+    let python_path = "/home/yuc/miniconda3/envs/GDA2025/bin/python3";
+
+    let mut cmd = Command::new(python_path);
     cmd.arg("scripts/select_anime.py")
         .arg("--mal-title")
         .arg(&anime.title)
@@ -398,7 +402,17 @@ async fn select_with_claude(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("select_anime.py failed: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        error!(
+            "select_anime.py failed\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        );
+        return Err(anyhow::anyhow!(
+            "select_anime.py failed with exit code {:?}\nstdout: {}\nstderr: {}",
+            output.status.code(),
+            stdout,
+            stderr
+        ));
     }
 
     let result: SelectionResult = serde_json::from_slice(&output.stdout)
