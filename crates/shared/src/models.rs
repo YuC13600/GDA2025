@@ -228,3 +228,12 @@ pub struct JobMetadata {
     pub transcript_path: Option<String>,
     pub tokens_path: Option<String>,
 }
+
+/// Anime selection result (cached from Claude Haiku)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimeSelection {
+    pub selected_index: i32,      // 1-based index from candidates list
+    pub selected_title: String,   // The title that was selected
+    pub confidence: String,        // "high", "medium", or "low"
+    pub reason: String,            // Reason for selection
+}

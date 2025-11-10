@@ -1,0 +1,25 @@
+[package]
+name = "anime-selector"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "anime-selector"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+shared = { path = "../shared" }
+tokio.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# Additional dependencies for anime selection
+futures = "0.3"

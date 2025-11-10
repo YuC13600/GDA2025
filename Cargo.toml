@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/shared",
     "crates/mal-scraper",
+    "crates/anime-selector",
     "crates/anime-downloader",
     "crates/transcriber",
 ]

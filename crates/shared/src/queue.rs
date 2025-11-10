@@ -596,6 +596,68 @@ impl JobQueue {
         Ok(())
     }
 
+    /// Get cached anime selection
+    pub fn get_selection(&self, mal_id: u32) -> Result<Option<AnimeSelection>> {
+        let conn = self.db.conn();
+
+        let selection = conn
+            .query_row(
+                "SELECT selected_index, selected_title, confidence, reason
+                 FROM anime_selection_cache WHERE mal_id = ?1",
+                params![mal_id],
+                |row| {
+                    Ok(AnimeSelection {
+                        selected_index: row.get(0)?,
+                        selected_title: row.get(1)?,
+                        confidence: row.get(2)?,
+                        reason: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .context("Failed to query anime selection cache")?;
+
+        Ok(selection)
+    }
+
+    /// Cache anime selection
+    pub fn cache_selection(
+        &mut self,
+        mal_id: u32,
+        anime_title: &str,
+        search_query: &str,
+        selected_index: i32,
+        selected_title: &str,
+        confidence: &str,
+        reason: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "INSERT OR REPLACE INTO anime_selection_cache
+             (mal_id, anime_title, search_query, selected_index, selected_title, confidence, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                mal_id,
+                anime_title,
+                search_query,
+                selected_index,
+                selected_title,
+                confidence,
+                reason,
+            ],
+        )?;
+
+        debug!(
+            mal_id = mal_id,
+            selected = %selected_title,
+            confidence = %confidence,
+            "Cached anime selection"
+        );
+
+        Ok(())
+    }
+
 }
 
 /// Helper: Convert a database row to a Job
