@@ -412,6 +412,91 @@ impl JobQueue {
         })
     }
 
+    /// Alias for get_stats() - for compatibility
+    pub fn get_queue_stats(&self) -> Result<JobStats> {
+        self.get_stats()
+    }
+
+    /// Dequeue next job from a specific stage
+    ///
+    /// Returns the job immediately, or error if no jobs available
+    pub fn dequeue_next(&mut self, stage: JobStage) -> Result<Job> {
+        match self.dequeue(stage, stage)? {
+            Some(job) => Ok(job),
+            None => anyhow::bail!("No jobs available in stage: {}", stage),
+        }
+    }
+
+    /// Update job stage
+    pub fn update_stage(&mut self, job_id: i64, stage: JobStage) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET stage = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+            params![stage.to_string(), job_id],
+        )?;
+
+        debug!(job_id = job_id, stage = %stage, "Updated job stage");
+
+        Ok(())
+    }
+
+    /// Update job with video file information
+    pub fn update_job_with_video(
+        &mut self,
+        job_id: i64,
+        video_path: std::path::PathBuf,
+        video_size: u64,
+    ) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET video_path = ?1, video_size_bytes = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
+            params![video_path.to_string_lossy().to_string(), video_size as i64, job_id],
+        )?;
+
+        debug!(
+            job_id = job_id,
+            video_size_mb = video_size / 1_000_000,
+            "Updated job with video info"
+        );
+
+        Ok(())
+    }
+
+    /// Increment retry count for a job
+    pub fn increment_retry(&mut self, job_id: i64) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            params![job_id],
+        )?;
+
+        debug!(job_id = job_id, "Incremented retry count");
+
+        Ok(())
+    }
+
+    /// Update job stage with error message
+    pub fn update_stage_with_error(
+        &mut self,
+        job_id: i64,
+        stage: JobStage,
+        error: String,
+    ) -> Result<()> {
+        let conn = self.db.conn_mut();
+
+        conn.execute(
+            "UPDATE jobs SET stage = ?1, error_message = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
+            params![stage.to_string(), error, job_id],
+        )?;
+
+        warn!(job_id = job_id, stage = %stage, error = %error, "Updated job stage with error");
+
+        Ok(())
+    }
+
 }
 
 /// Helper: Convert a database row to a Job

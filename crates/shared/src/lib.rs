@@ -23,7 +23,7 @@ pub use disk_monitor::{DiskMonitor, DiskUsage, SpaceBreakdown};
 pub use logging::LogConfig;
 pub use models::*;
 pub use paths::DataPaths;
-pub use queue::JobQueue;
+pub use queue::{JobQueue, JobStats};
 
 /// Common result type using anyhow::Error
 pub type Result<T> = anyhow::Result<T>;

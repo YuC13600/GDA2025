@@ -1,0 +1,34 @@
+[package]
+name = "anime-downloader"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Workspace crates
+shared = { path = "../shared" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+
+[[bin]]
+name = "anime-downloader"
+path = "src/main.rs"

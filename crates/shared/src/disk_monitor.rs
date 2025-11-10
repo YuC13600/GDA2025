@@ -75,6 +75,7 @@ struct CachedUsage {
 ///
 /// Monitors disk usage and provides pause/resume signals to prevent
 /// exceeding storage limits. Uses caching to avoid excessive filesystem I/O.
+#[derive(Clone)]
 pub struct DiskMonitor {
     /// Path to data directory
     data_dir: PathBuf,

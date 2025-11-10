@@ -21,6 +21,10 @@ pub struct Config {
 
     /// MAL scraper settings
     pub mal_scraper: MalScraperConfig,
+
+    /// Disk management settings
+    #[serde(default)]
+    pub disk_management: DiskManagementConfig,
 }
 
 /// Data directory configuration
@@ -101,6 +105,76 @@ pub struct CacheConfig {
     pub expiration_seconds: Option<u64>,
 }
 
+/// Disk management configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiskManagementConfig {
+    /// Hard limit in GB
+    pub hard_limit_gb: u64,
+
+    /// Pause downloads threshold in GB
+    pub pause_threshold_gb: u64,
+
+    /// Resume downloads threshold in GB
+    pub resume_threshold_gb: u64,
+
+    /// Check interval in seconds
+    pub check_interval_seconds: u64,
+
+    /// Cache duration for disk usage results in seconds
+    pub cache_duration_seconds: u64,
+
+    /// Maximum concurrent downloads
+    pub max_concurrent_downloads: usize,
+
+    /// Maximum concurrent transcriptions
+    pub max_concurrent_transcriptions: usize,
+
+    /// Cleanup configuration
+    pub cleanup: CleanupConfig,
+}
+
+/// Cleanup configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanupConfig {
+    /// Delete video after transcription
+    pub delete_video_after_transcription: bool,
+
+    /// Delete audio after transcription
+    pub delete_audio_after_transcription: bool,
+
+    /// Delete transcript after tokenization
+    pub delete_transcript_after_tokenization: bool,
+
+    /// Delete tokens after analysis
+    pub delete_tokens_after_analysis: bool,
+}
+
+impl Default for DiskManagementConfig {
+    fn default() -> Self {
+        Self {
+            hard_limit_gb: 250,
+            pause_threshold_gb: 230,
+            resume_threshold_gb: 200,
+            check_interval_seconds: 30,
+            cache_duration_seconds: 5,
+            max_concurrent_downloads: 5,
+            max_concurrent_transcriptions: 2,
+            cleanup: CleanupConfig::default(),
+        }
+    }
+}
+
+impl Default for CleanupConfig {
+    fn default() -> Self {
+        Self {
+            delete_video_after_transcription: true,
+            delete_audio_after_transcription: true,
+            delete_transcript_after_tokenization: false,
+            delete_tokens_after_analysis: false,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -132,6 +206,7 @@ impl Default for Config {
                 max_retries: 3,
                 retry_delay_ms: 1000,
             },
+            disk_management: DiskManagementConfig::default(),
         }
     }
 }

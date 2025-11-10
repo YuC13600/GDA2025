@@ -56,3 +56,26 @@ cache_dir = "cache"
 # Cache expiration in seconds (omit for permanent cache)
 # For MAL data, we use permanent cache (no expiration)
 # expiration_seconds = 86400  # Uncomment and set value if you want expiration
+
+[disk_management]
+# Storage limits (in GB)
+hard_limit_gb = 250
+pause_threshold_gb = 230
+resume_threshold_gb = 200
+
+# Monitoring interval (seconds)
+check_interval_seconds = 30
+
+# Cache duration for disk usage results (seconds)
+cache_duration_seconds = 5
+
+# Worker limits
+max_concurrent_downloads = 5
+max_concurrent_transcriptions = 2
+
+[disk_management.cleanup]
+# Aggressive cleanup (delete immediately after stage completion)
+delete_video_after_transcription = true
+delete_audio_after_transcription = true
+delete_transcript_after_tokenization = false
+delete_tokens_after_analysis = false
