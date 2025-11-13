@@ -18,6 +18,13 @@ Cargo.lock
 config.toml
 config.local.toml
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
 # IDE
 .vscode/
 .idea/
