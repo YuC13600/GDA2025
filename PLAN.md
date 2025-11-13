@@ -179,7 +179,7 @@ anime-zipf-analysis/
 **Deliverables**:
 - ✅ `anime-selector` binary
 - ✅ `scripts/get_anime_candidates.sh` - AllAnime API query script
-- ✅ `scripts/select_anime.py` - Claude Haiku selection script (uses Claude Sonnet 3.5)
+- ✅ `scripts/select_anime.py` - Claude Haiku selection script (uses Claude 3.5 Haiku)
 - ✅ Populated `anime_selection_cache` table with episode matching validation
 - ✅ Selection report with confidence statistics
 

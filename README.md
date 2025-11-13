@@ -53,7 +53,7 @@ A research project investigating **Zipf's law** in media content by analyzing wo
 ### Implemented ✅
 
 - **Automatic Anime Discovery**: Auto-discovers 130+ categories from MyAnimeList via Jikan API
-- **AI-Powered Selection**: Uses Claude Sonnet 3.5 to intelligently match anime titles
+- **AI-Powered Selection**: Uses Claude 3.5 Haiku to intelligently match anime titles
 - **Disk-Aware Downloads**: Automatically pauses when disk space is low, resumes when space is freed
 - **Aggressive Cleanup**: Deletes video and audio files immediately after transcription
 - **Concurrent Processing**: Worker pools for parallel downloads and transcriptions
@@ -75,7 +75,7 @@ A research project investigating **Zipf's law** in media content by analyzing wo
 
 **Key Technologies**:
 - **Database**: SQLite (job queue coordination)
-- **API Integration**: Jikan API v4 (MAL), Claude Sonnet 3.5, AllAnime API
+- **API Integration**: Jikan API v4 (MAL), Claude 3.5 Haiku, AllAnime API
 - **Video Download**: `ani-cli` (via subprocess)
 - **Audio Extraction**: FFmpeg
 - **Speech-to-Text**: OpenAI Whisper (local, base model)
@@ -190,7 +190,7 @@ The system implements aggressive cleanup to process 172K episodes within 300GB:
 
 ### AI-Powered Anime Selection
 
-Claude Sonnet 3.5 intelligently selects correct anime from AllAnime search results:
+Claude 3.5 Haiku intelligently selects correct anime from AllAnime search results:
 - Distinguishes main series from specials/OVAs
 - Validates episode counts
 - Provides confidence levels for manual review
@@ -251,7 +251,7 @@ This is open-source research code. You are free to use, modify, and distribute i
 ## Acknowledgments
 
 - **MyAnimeList** - Anime metadata via Jikan API
-- **Anthropic** - Claude Sonnet 3.5 for intelligent selection
+- **Anthropic** - Claude 3.5 Haiku for intelligent selection
 - **OpenAI** - Whisper for speech-to-text
 - **ani-cli** - Reliable anime downloader
 - **Rust Community** - Excellent ecosystem for performant tooling
