@@ -21,7 +21,7 @@ search_gql='query(        $search: SearchInput        $limit: Int        $page: 
 
 # Call API
 result=$(curl -e "$allanime_refr" -s -G "${allanime_api}/api" \
-    --data-urlencode "variables={\"search\":{\"allowAdult\":false,\"allowUnknown\":false,\"query\":\"$QUERY\"},\"limit\":10,\"page\":1,\"translationType\":\"$mode\",\"countryOrigin\":\"ALL\"}" \
+    --data-urlencode "variables={\"search\":{\"allowAdult\":true,\"allowUnknown\":false,\"query\":\"$QUERY\"},\"limit\":10,\"page\":1,\"translationType\":\"$mode\",\"countryOrigin\":\"ALL\"}" \
     --data-urlencode "query=$search_gql" \
     -A "$agent" 2>/dev/null)
 

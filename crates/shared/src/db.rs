@@ -101,13 +101,18 @@ impl Database {
                     search_query TEXT NOT NULL,
                     selected_index INTEGER NOT NULL,
                     selected_title TEXT NOT NULL,
-                    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low')),
+                    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low', 'no_candidates')),
                     reason TEXT,
+                    mal_episodes INTEGER,
+                    selected_episodes INTEGER,
+                    episode_match TEXT CHECK(episode_match IN ('exact', 'close', 'acceptable', 'mismatch', 'unknown', NULL)),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (mal_id) REFERENCES anime(mal_id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_selection_cache_confidence
-                ON anime_selection_cache(confidence);"
+                ON anime_selection_cache(confidence);
+                CREATE INDEX IF NOT EXISTS idx_selection_cache_episode_match
+                ON anime_selection_cache(episode_match);"
             ).context("Failed to create anime_selection_cache table")?;
             info!("Migration completed: anime_selection_cache table created");
         }

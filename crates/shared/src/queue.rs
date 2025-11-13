@@ -602,7 +602,8 @@ impl JobQueue {
 
         let selection = conn
             .query_row(
-                "SELECT selected_index, selected_title, confidence, reason
+                "SELECT selected_index, selected_title, confidence, reason,
+                        mal_episodes, selected_episodes, episode_match
                  FROM anime_selection_cache WHERE mal_id = ?1",
                 params![mal_id],
                 |row| {
@@ -611,6 +612,9 @@ impl JobQueue {
                         selected_title: row.get(1)?,
                         confidence: row.get(2)?,
                         reason: row.get(3)?,
+                        mal_episodes: row.get(4)?,
+                        selected_episodes: row.get(5)?,
+                        episode_match: row.get(6)?,
                     })
                 },
             )
@@ -630,13 +634,17 @@ impl JobQueue {
         selected_title: &str,
         confidence: &str,
         reason: Option<&str>,
+        mal_episodes: Option<i32>,
+        selected_episodes: Option<i32>,
+        episode_match: Option<&str>,
     ) -> Result<()> {
         let conn = self.db.conn_mut();
 
         conn.execute(
             "INSERT OR REPLACE INTO anime_selection_cache
-             (mal_id, anime_title, search_query, selected_index, selected_title, confidence, reason)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (mal_id, anime_title, search_query, selected_index, selected_title, confidence, reason,
+              mal_episodes, selected_episodes, episode_match)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 mal_id,
                 anime_title,
@@ -645,6 +653,9 @@ impl JobQueue {
                 selected_title,
                 confidence,
                 reason,
+                mal_episodes,
+                selected_episodes,
+                episode_match,
             ],
         )?;
 
@@ -652,6 +663,7 @@ impl JobQueue {
             mal_id = mal_id,
             selected = %selected_title,
             confidence = %confidence,
+            episode_match = ?episode_match,
             "Cached anime selection"
         );
 

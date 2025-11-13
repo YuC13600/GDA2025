@@ -236,6 +236,39 @@ impl AnimeDownloader {
 
     /// Download a single episode using ani-cli.
     async fn download_episode(&self, job: &Job) -> Result<PathBuf> {
+        // Get the selected anime title from anime_selection_cache
+        let selection = self.queue
+            .lock()
+            .unwrap()
+            .get_selection(job.mal_id)
+            .context("Failed to get anime selection")?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No anime selection found for mal_id {}. Run anime-selector first!",
+                    job.mal_id
+                )
+            })?;
+
+        // Check if anime was selected with acceptable confidence
+        if selection.confidence == "no_candidates" {
+            anyhow::bail!(
+                "Anime {} has no candidates on AllAnime, cannot download",
+                job.anime_title
+            );
+        }
+
+        // Use selected_title (AllAnime title) for download, not MAL title
+        let download_title = &selection.selected_title;
+
+        info!(
+            worker_id = self.worker_id,
+            job_id = job.id,
+            mal_title = %job.anime_title,
+            selected_title = %download_title,
+            confidence = %selection.confidence,
+            "Using anime-selector result for download"
+        );
+
         // Determine output directory
         let output_dir = self.data_paths.video_dir(job.mal_id);
 
@@ -262,7 +295,7 @@ impl AnimeDownloader {
                 worker_id = self.worker_id,
                 job_id = job.id,
                 "Dry run mode: would download {} episode {}",
-                job.anime_title,
+                download_title,
                 job.episode
             );
 
@@ -274,7 +307,7 @@ impl AnimeDownloader {
         info!(
             worker_id = self.worker_id,
             job_id = job.id,
-            anime_title = %job.anime_title,
+            anime_title = %download_title,
             episode = job.episode,
             output_path = %output_path.display(),
             "Starting download with ani-cli"
@@ -289,13 +322,14 @@ impl AnimeDownloader {
         // Build ani-cli command
         // ani-cli -d -e episode_num -S 1 "anime title"
         // Note: ani-cli downloads to current directory, so we need to change directory first
+        // IMPORTANT: Use selected_title from AllAnime, not MAL title
         let status = Command::new("sh")
             .arg("-c")
             .arg(format!(
                 "cd '{}' && ani-cli -d -e {} -S 1 '{}'",
                 output_dir.display(),
                 job.episode,
-                job.anime_title
+                download_title
             ))
             .status()
             .context("Failed to execute ani-cli command")?;

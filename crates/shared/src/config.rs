@@ -34,8 +34,12 @@ pub struct Config {
 /// Data directory configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataConfig {
-    /// Root data directory path
+    /// Root data directory path (for database and logs on local SSD)
     pub root_dir: String,
+
+    /// Storage directory path (for videos and transcripts on external HDD)
+    /// If not specified, uses root_dir for all data
+    pub storage_dir: Option<String>,
 }
 
 /// Database configuration
@@ -199,6 +203,7 @@ impl Default for Config {
         Self {
             data: DataConfig {
                 root_dir: "data".to_string(),
+                storage_dir: None,
             },
             database: DatabaseConfig {
                 path: "jobs.db".to_string(),
@@ -319,6 +324,15 @@ impl Config {
         } else {
             self.data_dir().join(cache_path)
         }
+    }
+
+    /// Get the storage directory path (for videos and transcripts)
+    /// Falls back to data_dir if storage_dir is not specified
+    pub fn storage_dir(&self) -> PathBuf {
+        self.data.storage_dir
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| self.data_dir())
     }
 }
 

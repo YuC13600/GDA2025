@@ -236,4 +236,7 @@ pub struct AnimeSelection {
     pub selected_title: String,   // The title that was selected
     pub confidence: String,        // "high", "medium", or "low"
     pub reason: String,            // Reason for selection
+    pub mal_episodes: Option<i32>,      // Episode count from MAL
+    pub selected_episodes: Option<i32>, // Episode count from selected anime
+    pub episode_match: Option<String>,  // "exact", "close", "acceptable", "mismatch", "unknown"
 }

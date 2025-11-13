@@ -9,8 +9,9 @@ from ani-cli search results based on MAL metadata.
 import os
 import sys
 import json
+import re
 import argparse
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 try:
     import anthropic
@@ -21,6 +22,40 @@ except ImportError:
         "confidence": "error"
     }))
     sys.exit(1)
+
+
+def parse_episode_count(title: str) -> Optional[int]:
+    """Extract episode count from anime title string like 'Title (64 eps)'"""
+    match = re.search(r'\((\d+)\s+eps?\)', title, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def validate_episode_match(mal_episodes: Optional[int], selected_episodes: Optional[int]) -> Tuple[str, Optional[str]]:
+    """
+    Validate episode count match between MAL and selected anime.
+
+    Returns:
+        (match_status, adjusted_confidence) where:
+        - match_status: "exact", "close", "acceptable", "mismatch", or "unknown"
+        - adjusted_confidence: None or "low"/"medium" if confidence should be downgraded
+    """
+    if mal_episodes is None or selected_episodes is None:
+        return ("unknown", None)
+
+    diff = abs(selected_episodes - mal_episodes)
+    diff_percent = diff / mal_episodes if mal_episodes > 0 else 0
+
+    if diff == 0:
+        return ("exact", None)
+    elif diff <= 2:
+        return ("close", None)  # Acceptable difference (±2 episodes)
+    elif diff <= 5 or diff_percent <= 0.1:
+        return ("acceptable", None)  # Small difference (<10%)
+    else:
+        # Large difference - likely selected wrong anime
+        return ("mismatch", "low")
 
 
 def create_selection_prompt(mal_info: Dict[str, Any], candidates: List[str]) -> str:
@@ -151,6 +186,25 @@ def select_anime_with_claude(
             result["index"] = 1
             result["confidence"] = "low"
             result["reason"] = f"Invalid index {index}, using first candidate"
+
+        # Validate episode count match
+        selected_title = candidates[index - 1]
+        selected_episodes = parse_episode_count(selected_title)
+        mal_episodes = mal_info.get('episodes')
+
+        episode_match, confidence_adjustment = validate_episode_match(mal_episodes, selected_episodes)
+
+        # Adjust confidence if episode mismatch
+        if confidence_adjustment:
+            if result["confidence"] == "high":
+                result["confidence"] = "medium"
+            elif result["confidence"] == "medium":
+                result["confidence"] = "low"
+
+        # Add episode validation info to result
+        result["mal_episodes"] = mal_episodes
+        result["selected_episodes"] = selected_episodes
+        result["episode_match"] = episode_match
 
         return result
 

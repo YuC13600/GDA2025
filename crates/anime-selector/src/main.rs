@@ -57,6 +57,9 @@ struct SelectionResult {
     index: i32,
     confidence: String,
     reason: String,
+    mal_episodes: Option<i32>,
+    selected_episodes: Option<i32>,
+    episode_match: Option<String>,
 }
 
 #[derive(Debug)]
@@ -67,6 +70,7 @@ struct SelectionStats {
     high_confidence: usize,
     medium_confidence: usize,
     low_confidence: usize,
+    no_candidates: usize,
     errors: usize,
 }
 
@@ -79,6 +83,7 @@ impl SelectionStats {
             high_confidence: 0,
             medium_confidence: 0,
             low_confidence: 0,
+            no_candidates: 0,
             errors: 0,
         }
     }
@@ -91,6 +96,7 @@ impl SelectionStats {
         info!("  - High confidence: {}", self.high_confidence);
         info!("  - Medium confidence: {}", self.medium_confidence);
         info!("  - Low confidence: {}", self.low_confidence);
+        info!("No candidates found: {} (marked as skipped)", self.no_candidates);
         info!("Errors: {}", self.errors);
     }
 }
@@ -210,11 +216,19 @@ async fn process_anime_batch(
 
             match &result {
                 Ok(Some(ref confidence)) => {
-                    stats_guard.selected += 1;
                     match confidence.as_str() {
-                        "high" => stats_guard.high_confidence += 1,
-                        "medium" => stats_guard.medium_confidence += 1,
-                        "low" => stats_guard.low_confidence += 1,
+                        "no_candidates" => {
+                            stats_guard.no_candidates += 1;
+                        }
+                        "high" | "medium" | "low" => {
+                            stats_guard.selected += 1;
+                            match confidence.as_str() {
+                                "high" => stats_guard.high_confidence += 1,
+                                "medium" => stats_guard.medium_confidence += 1,
+                                "low" => stats_guard.low_confidence += 1,
+                                _ => {}
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -271,22 +285,31 @@ async fn process_anime(
     // Get candidates from AllAnime
     let candidates = match get_anime_candidates(&anime.title).await {
         Ok(c) if !c.is_empty() => c,
-        Ok(_) => {
+        Ok(_) | Err(_) => {
+            // No candidates found or API error - mark as skipped
             warn!(
                 mal_id = anime.mal_id,
                 title = %anime.title,
-                "No candidates found from AllAnime"
+                "No candidates found from AllAnime, marking as skipped"
             );
-            return Err(anyhow::anyhow!("No candidates found"));
-        }
-        Err(e) => {
-            error!(
-                mal_id = anime.mal_id,
-                title = %anime.title,
-                error = %e,
-                "Failed to get candidates"
-            );
-            return Err(e);
+
+            // Cache with special marker (selected_index = -1)
+            if !dry_run {
+                queue.cache_selection(
+                    anime.mal_id,
+                    &anime.title,
+                    &anime.title,
+                    -1,  // Special marker for "no candidates"
+                    "N/A",
+                    "no_candidates",
+                    Some("No candidates found from AllAnime (likely adult content or not available)"),
+                    anime.episodes_total,
+                    None,
+                    Some("unknown"),
+                )?;
+            }
+
+            return Ok(Some("no_candidates".to_string()));
         }
     };
 
@@ -333,6 +356,9 @@ async fn process_anime(
             &selected_title,
             &selection_result.confidence,
             Some(&selection_result.reason),
+            selection_result.mal_episodes,
+            selection_result.selected_episodes,
+            selection_result.episode_match.as_deref(),
         )?;
     }
 
@@ -368,31 +394,60 @@ async fn select_with_claude(
 ) -> Result<SelectionResult> {
     let candidates_json = serde_json::to_string(candidates)?;
 
-    // Use conda environment's Python to ensure anthropic is available
-    let python_path = "/home/yuc/miniconda3/envs/GDA2025/bin/python3";
+    // Helper function to quote arguments for use inside zsh -c '...'
+    // Use double quotes and escape ", $, `, and \
+    fn shell_quote(s: &str) -> String {
+        let escaped = s
+            .replace('\\', r"\\")
+            .replace('"', r#"\""#)
+            .replace('$', r"\$")
+            .replace('`', r"\`");
+        format!(r#""{}""#, escaped)
+    }
 
-    let mut cmd = Command::new(python_path);
-    cmd.arg("scripts/select_anime.py")
-        .arg("--mal-title")
-        .arg(&anime.title)
-        .arg("--candidates")
-        .arg(&candidates_json);
+    // Helper function to use single quotes (for strings without variables/substitution)
+    // Single quotes prevent all special character processing including !
+    // To include a literal single quote, we end the quote, add \', and start a new quote
+    fn shell_quote_single(s: &str) -> String {
+        let escaped = s.replace('\'', r"'\''");
+        format!("'{}'", escaped)
+    }
+
+    // Build Python command with properly quoted arguments
+    // Use single quotes for candidates JSON to avoid ! expansion issues
+    let mut python_cmd = format!(
+        "scripts/select_anime.py --mal-title {} --candidates {}",
+        shell_quote(&anime.title),
+        shell_quote_single(&candidates_json)
+    );
 
     if let Some(episodes) = anime.episodes_total {
-        cmd.arg("--episodes").arg(episodes.to_string());
+        python_cmd.push_str(&format!(" --episodes {}", episodes));
     }
 
     if let Some(year) = anime.year {
-        cmd.arg("--year").arg(year.to_string());
+        python_cmd.push_str(&format!(" --year {}", year));
     }
 
     if let Some(ref anime_type) = anime.anime_type {
-        cmd.arg("--anime-type").arg(anime_type);
+        python_cmd.push_str(&format!(" --anime-type {}", shell_quote(anime_type)));
     }
 
     if !api_key.is_empty() {
-        cmd.arg("--api-key").arg(api_key);
+        python_cmd.push_str(&format!(" --api-key {}", shell_quote(api_key)));
     }
+
+    // Use zsh with conda activation - CRITICAL: zsh required for conda
+    // Disable history expansion with 'set +H' to prevent ! from being escaped
+    let full_cmd = format!(
+        r#"set +H && eval "$(conda shell.zsh hook)" && conda activate GDA2025 && python3 {}"#,
+        python_cmd
+    );
+
+    debug!("Executing command: zsh -c '{}'", full_cmd);
+
+    let mut cmd = Command::new("zsh");
+    cmd.arg("-c").arg(&full_cmd);
 
     let output = cmd
         .stdout(Stdio::piped())
@@ -478,6 +533,7 @@ impl Clone for SelectionStats {
             high_confidence: self.high_confidence,
             medium_confidence: self.medium_confidence,
             low_confidence: self.low_confidence,
+            no_candidates: self.no_candidates,
             errors: self.errors,
         }
     }

@@ -71,8 +71,8 @@ async fn main() -> Result<()> {
         "Runtime configuration"
     );
 
-    // Initialize data paths
-    let data_paths = DataPaths::new(config.data_dir());
+    // Initialize data paths (with separate storage directory for videos)
+    let data_paths = DataPaths::new_with_storage(config.data_dir(), config.storage_dir());
     data_paths
         .create_dirs()
         .context("Failed to create data directories")?;

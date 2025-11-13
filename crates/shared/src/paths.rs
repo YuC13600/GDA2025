@@ -8,27 +8,47 @@ use std::path::{Path, PathBuf};
 /// File path manager for data files
 #[derive(Debug, Clone)]
 pub struct DataPaths {
+    /// Root directory for database and logs (usually on local SSD)
     root: PathBuf,
+    /// Storage directory for videos and transcripts (can be on external HDD)
+    storage: PathBuf,
 }
 
 impl DataPaths {
     /// Create a new DataPaths with the given root directory
+    /// (storage directory will be the same as root)
     pub fn new(root: impl AsRef<Path>) -> Self {
+        let root_path = root.as_ref().to_path_buf();
         Self {
-            root: root.as_ref().to_path_buf(),
+            root: root_path.clone(),
+            storage: root_path,
         }
     }
 
-    /// Get the root data directory
+    /// Create a new DataPaths with separate root and storage directories
+    pub fn new_with_storage(root: impl AsRef<Path>, storage: impl AsRef<Path>) -> Self {
+        Self {
+            root: root.as_ref().to_path_buf(),
+            storage: storage.as_ref().to_path_buf(),
+        }
+    }
+
+    /// Get the root data directory (for database and logs)
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    /// Get the storage directory (for videos and transcripts)
+    pub fn storage(&self) -> &Path {
+        &self.storage
+    }
+
     // ========== Video paths (TEMPORARY - auto-deleted) ==========
+    // Videos are stored on external storage
 
     /// Get video directory for an anime
     pub fn video_dir(&self, anime_id: u32) -> PathBuf {
-        self.root
+        self.storage
             .join("videos")
             .join(anime_id.to_string())
             .join("episodes")
@@ -41,6 +61,7 @@ impl DataPaths {
     }
 
     // ========== Audio paths (TEMPORARY - auto-deleted) ==========
+    // Audio files are stored on root (temporary, will be deleted after transcription)
 
     /// Get audio directory for an anime
     pub fn audio_dir(&self, anime_id: u32) -> PathBuf {
@@ -54,6 +75,7 @@ impl DataPaths {
     }
 
     // ========== Transcript paths (PERMANENT) ==========
+    // Transcripts are stored on root (local SSD, small files)
 
     /// Get transcript directory for an anime
     pub fn transcript_dir(&self, anime_id: u32) -> PathBuf {
@@ -219,7 +241,9 @@ impl DataPaths {
     /// Create all necessary directories
     pub fn create_dirs(&self) -> std::io::Result<()> {
         let dirs = vec![
-            self.root.join("videos"),
+            // Storage directories (external HDD) - only videos
+            self.storage.join("videos"),
+            // Root directories (local SSD)
             self.root.join("audio"),
             self.root.join("transcripts"),
             self.root.join("tokens"),
