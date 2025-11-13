@@ -11,9 +11,9 @@ This document describes the disk space management system that allows the pipelin
 ## Storage Budget
 
 ### Target Limits
-- **Hard limit**: 250 GB total disk usage
-- **Pause threshold**: 230 GB (pause new downloads)
-- **Resume threshold**: 200 GB (resume downloads)
+- **Hard limit**: 300 GB total disk usage
+- **Pause threshold**: 280 GB (pause new downloads)
+- **Resume threshold**: 250 GB (resume downloads)
 - **Safety margin**: 20 GB (for ongoing operations)
 
 ### Space Allocation
@@ -35,7 +35,7 @@ This document describes the disk space management system that allows the pipelin
 └────────┬────────┘
          │
          ├──→ ┌──────────────┐
-         │    │  Downloader  │  ← Pauses at 230GB, resumes at 200GB
+         │    │  Downloader  │  ← Pauses at 280GB, resumes at 250GB
          │    └──────┬───────┘
          │           │
          │           ↓ (downloads video)
@@ -58,7 +58,7 @@ queued → downloading → downloaded → transcribing → transcribed → ...
   │                  [Video File]   [Deleted]
   │                  [~500MB]
   │
-  └── Downloader pauses here if disk > 230GB
+  └── Downloader pauses here if disk > 280GB
 ```
 
 ## Implementation Details
@@ -70,9 +70,9 @@ queued → downloading → downloaded → transcribing → transcribed → ...
 ```rust
 pub struct DiskMonitor {
     data_dir: PathBuf,
-    hard_limit: u64,      // 250 GB
-    pause_threshold: u64,  // 230 GB
-    resume_threshold: u64, // 200 GB
+    hard_limit: u64,      // 300 GB
+    pause_threshold: u64,  // 280 GB
+    resume_threshold: u64, // 250 GB
 }
 
 impl DiskMonitor {

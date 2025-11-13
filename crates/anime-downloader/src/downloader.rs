@@ -258,13 +258,19 @@ impl AnimeDownloader {
         }
 
         // Use selected_title (AllAnime title) for download, not MAL title
-        let download_title = &selection.selected_title;
+        // IMPORTANT: Strip episode count suffix like " (12 eps)" from AllAnime titles
+        // because ani-cli searches don't recognize that format
+        let download_title = selection.selected_title
+            .split(" (")
+            .next()
+            .unwrap_or(&selection.selected_title);
 
         info!(
             worker_id = self.worker_id,
             job_id = job.id,
             mal_title = %job.anime_title,
-            selected_title = %download_title,
+            selected_title = %selection.selected_title,
+            search_title = %download_title,
             confidence = %selection.confidence,
             "Using anime-selector result for download"
         );

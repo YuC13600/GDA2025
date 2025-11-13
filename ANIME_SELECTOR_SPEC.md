@@ -204,9 +204,13 @@ CREATE TABLE anime_selection_cache (
     search_query TEXT NOT NULL,
     selected_index INTEGER NOT NULL,      -- 1-based index from candidates
     selected_title TEXT NOT NULL,         -- The selected title
-    confidence TEXT NOT NULL              -- 'high', 'medium', or 'low'
-        CHECK(confidence IN ('high', 'medium', 'low')),
+    confidence TEXT NOT NULL              -- 'high', 'medium', 'low', or 'no_candidates'
+        CHECK(confidence IN ('high', 'medium', 'low', 'no_candidates')),
     reason TEXT,                          -- Why this selection was made
+    mal_episodes INTEGER,                 -- Episode count from MAL (NEW)
+    selected_episodes INTEGER,            -- Episode count from selected anime (NEW)
+    episode_match TEXT                    -- Episode validation result (NEW)
+        CHECK(episode_match IN ('exact', 'close', 'acceptable', 'mismatch', 'unknown', NULL)),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (mal_id) REFERENCES anime(mal_id)
@@ -214,6 +218,9 @@ CREATE TABLE anime_selection_cache (
 
 CREATE INDEX idx_selection_cache_confidence
 ON anime_selection_cache(confidence);
+
+CREATE INDEX idx_selection_cache_episode_match
+ON anime_selection_cache(episode_match);
 ```
 
 ### Selection Fields
@@ -227,7 +234,16 @@ ON anime_selection_cache(confidence);
   - `high`: Exact match, very confident
   - `medium`: Good match but some ambiguity
   - `low`: Multiple possibilities, manual review recommended
+  - `no_candidates`: No candidates found (AllAnime doesn't have this anime)
 - **reason**: Explanation from Claude Haiku
+- **mal_episodes** (NEW): Episode count from MAL metadata
+- **selected_episodes** (NEW): Episode count from selected anime
+- **episode_match** (NEW): Episode count validation result
+  - `exact`: Episode counts match exactly
+  - `close`: Within ±1-2 episodes (acceptable)
+  - `acceptable`: Within ±3 episodes (usable but review recommended)
+  - `mismatch`: Large difference (>3 episodes, likely wrong match)
+  - `unknown`: Could not determine episode count
 
 ## Claude Haiku Selection Criteria
 
@@ -476,4 +492,4 @@ Benefits:
 
 ---
 
-*Last updated: 2025-11-10*
+*Last updated: 2025-11-13*

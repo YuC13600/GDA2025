@@ -140,12 +140,21 @@ anime-zipf-analysis/
 - Unique anime: ~800-1200
 - Total episodes: ~12,000-18,000
 
+**Actual Results (Completed)**:
+- Categories processed: 130+
+- Unique anime: **13,391** (10x more than expected!)
+- Total episodes: **172,066** (10x more than expected!)
+- Cache size: ~596 KB (MAL API responses)
+- Database size: 49 MB (jobs.db)
+
 **Deliverables**:
-- `mal-scraper` binary
-- Populated job queue with deduplicated anime download tasks
-- Cache directory (~20 MB)
-- Statistics JSON file
+- ✅ `mal-scraper` binary
+- ✅ Populated job queue with deduplicated anime download tasks
+- ✅ Cache directory (~20 MB)
+- ✅ Statistics JSON file
 - See [MAL_SCRAPER_SPEC.md](./MAL_SCRAPER_SPEC.md) for complete specification
+
+**Status**: ✅ **COMPLETED**
 
 ---
 
@@ -168,13 +177,23 @@ anime-zipf-analysis/
   - Parse JSON response with index, confidence, reason
 
 **Deliverables**:
-- `anime-selector` binary
-- `scripts/get_anime_candidates.sh` - AllAnime API query script
-- `scripts/select_anime.py` - Claude Haiku selection script
-- Populated `anime_selection_cache` table
-- Selection report with confidence statistics
+- ✅ `anime-selector` binary
+- ✅ `scripts/get_anime_candidates.sh` - AllAnime API query script
+- ✅ `scripts/select_anime.py` - Claude Haiku selection script (uses Claude Sonnet 3.5)
+- ✅ Populated `anime_selection_cache` table with episode matching validation
+- ✅ Selection report with confidence statistics
 
-**Cost Estimate**: ~$0.000225 per selection, ~$38.67 for 171,851 anime
+**Actual Results (Completed)**:
+- Total anime selected: 13,390
+- High confidence: 8,052 (60%)
+- Medium confidence: 1,241 (9%)
+- Low confidence: 333 (2%)
+- No candidates found: 3,764 (28%)
+- **New feature**: `episode_match` field validates episode count accuracy
+  - Options: exact, close, acceptable, mismatch, unknown
+- Actual cost: ~$3.01 for 13,390 anime
+
+**Status**: ✅ **COMPLETED**
 
 ---
 
@@ -196,8 +215,18 @@ anime-zipf-analysis/
 - Mark jobs as `Stage::Downloaded` on success
 
 **Deliverables**:
-- `anime-downloader` binary
-- Downloaded video files in organized structure
+- ✅ `anime-downloader` binary
+- ✅ Downloaded video files in organized structure
+- ✅ Disk-aware coordination (pauses at threshold, resumes when space available)
+- ✅ Concurrent worker pool (configurable, default: 5)
+- ✅ Selection cache integration (reads from `anime_selection_cache`)
+
+**Current Status (In Progress)**:
+- Downloaded: 274 episodes
+- Failed: 270 episodes
+- Downloading: 5 episodes
+- Queued: 171,491 episodes
+- **Status**: 🔄 **RUNNING** (Do not disrupt)
 
 ---
 
@@ -221,9 +250,19 @@ anime-zipf-analysis/
 - Update job status to `Stage::Transcribed`
 
 **Deliverables**:
-- `transcriber` binary
-- Transcript text files
-- Video and audio files automatically deleted (peak disk: ~35 GB)
+- ✅ `transcriber` binary
+- ✅ Transcript text files
+- ✅ Video and audio files automatically deleted (peak disk: ~35 GB)
+- ✅ FFmpeg audio extraction to WAV
+- ✅ OpenAI Whisper integration (Python CLI)
+- ✅ Aggressive cleanup (deletes video + audio immediately after transcription)
+
+**Current Status (In Progress)**:
+- Transcribed: 25 episodes (~31KB-50KB per episode)
+- Transcribing: 1 episode
+- Completed anime: 7 anime with full transcripts
+- Total transcript data: ~140 KB
+- **Status**: 🔄 **RUNNING** (Do not disrupt)
 
 ---
 
@@ -459,5 +498,5 @@ For detailed specifications of the job queue system and file structure, see **[T
 
 ---
 
-*Last updated: 2025-11-10*
-*Status: Phases 1-4 complete, Phase 5 (anime-selector) in progress*
+*Last updated: 2025-11-13*
+*Status: Phases 1-3 **COMPLETED** ✅ | Phases 4-5 **RUNNING** 🔄 (downloader + transcriber active) | Phases 6-9 **PENDING** ⏳*

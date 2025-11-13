@@ -194,14 +194,18 @@ CREATE TABLE anime_selection_cache (
     search_query TEXT NOT NULL,
     selected_index INTEGER NOT NULL,      -- 1-based index from candidates list
     selected_title TEXT NOT NULL,         -- The title that was selected
-    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low')),
+    confidence TEXT NOT NULL CHECK(confidence IN ('high', 'medium', 'low', 'no_candidates')),
     reason TEXT,
+    mal_episodes INTEGER,                 -- Episode count from MAL metadata
+    selected_episodes INTEGER,            -- Episode count from selected anime
+    episode_match TEXT CHECK(episode_match IN ('exact', 'close', 'acceptable', 'mismatch', 'unknown', NULL)),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (mal_id) REFERENCES anime(mal_id)
 );
 
 CREATE INDEX idx_selection_cache_confidence ON anime_selection_cache(confidence);
+CREATE INDEX idx_selection_cache_episode_match ON anime_selection_cache(episode_match);
 
 -- Triggers for automatic updated_at
 CREATE TRIGGER update_jobs_timestamp
@@ -456,10 +460,13 @@ pub enum FileType {
 pub struct AnimeSelection {
     pub selected_index: i32,
     pub selected_title: String,
-    pub confidence: String,  // "high", "medium", or "low"
+    pub confidence: String,  // "high", "medium", "low", or "no_candidates"
     pub reason: String,
     pub anime_title: String,
     pub search_query: String,
+    pub mal_episodes: Option<i32>,        // Episode count from MAL
+    pub selected_episodes: Option<i32>,   // Episode count from selected anime
+    pub episode_match: Option<String>,    // "exact", "close", "acceptable", "mismatch", "unknown"
 }
 ```
 
@@ -1103,5 +1110,5 @@ If you want faster processing (more parallel jobs):
 
 ---
 
-*Last updated: 2025-11-10*
+*Last updated: 2025-11-13*
 *See PLAN.md for overall implementation plan*
