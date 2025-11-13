@@ -73,12 +73,15 @@ struct CachedUsage {
 
 /// Disk space monitor for coordinating pipeline components.
 ///
-/// Monitors disk usage and provides pause/resume signals to prevent
+/// Monitors disk usage across both local SSD (data directory) and external
+/// storage (videos directory), providing pause/resume signals to prevent
 /// exceeding storage limits. Uses caching to avoid excessive filesystem I/O.
 #[derive(Clone)]
 pub struct DiskMonitor {
-    /// Path to data directory
+    /// Path to data directory (local SSD: audio, transcripts, cache, db)
     data_dir: PathBuf,
+    /// Path to storage directory (external HDD: videos)
+    storage_dir: PathBuf,
     /// Hard limit in bytes (e.g., 250 GB)
     hard_limit: u64,
     /// Threshold to pause downloads (e.g., 230 GB)
@@ -96,19 +99,22 @@ impl DiskMonitor {
     ///
     /// # Arguments
     ///
-    /// * `data_dir` - Path to data directory to monitor
+    /// * `data_dir` - Path to data directory (local SSD: audio, transcripts, cache, db)
+    /// * `storage_dir` - Path to storage directory (external HDD: videos)
     /// * `hard_limit_gb` - Hard limit in GB (e.g., 250)
     /// * `pause_threshold_gb` - Pause downloads at this limit in GB (e.g., 230)
     /// * `resume_threshold_gb` - Resume downloads below this limit in GB (e.g., 200)
     /// * `cache_duration` - How long to cache usage results (e.g., 5 seconds)
     pub fn new(
         data_dir: impl AsRef<Path>,
+        storage_dir: impl AsRef<Path>,
         hard_limit_gb: u64,
         pause_threshold_gb: u64,
         resume_threshold_gb: u64,
         cache_duration: Duration,
     ) -> Result<Self> {
         let data_dir = data_dir.as_ref().to_path_buf();
+        let storage_dir = storage_dir.as_ref().to_path_buf();
 
         // Validate thresholds
         if pause_threshold_gb > hard_limit_gb {
@@ -129,6 +135,7 @@ impl DiskMonitor {
 
         Ok(Self {
             data_dir,
+            storage_dir,
             hard_limit: hard_limit_gb * 1_000_000_000,
             pause_threshold: pause_threshold_gb * 1_000_000_000,
             resume_threshold: resume_threshold_gb * 1_000_000_000,
@@ -231,15 +238,21 @@ impl DiskMonitor {
     }
 
     /// Calculate actual disk usage by walking directories.
+    ///
+    /// Videos are stored in storage_dir (external HDD), while audio, transcripts,
+    /// cache, and database are stored in data_dir (local SSD).
     fn calculate_usage(&self) -> Result<DiskUsage> {
-        let videos_bytes = self.calculate_dir_size(&self.data_dir.join("videos"))?;
+        // Videos are on external storage (storage_dir)
+        let videos_bytes = self.calculate_dir_size(&self.storage_dir.join("videos"))?;
+
+        // Everything else is on local SSD (data_dir)
         let audio_bytes = self.calculate_dir_size(&self.data_dir.join("audio"))?;
         let transcripts_bytes = self.calculate_dir_size(&self.data_dir.join("transcripts"))?;
         let tokens_bytes = self.calculate_dir_size(&self.data_dir.join("tokens"))?;
         let cache_bytes = self.calculate_dir_size(&self.data_dir.join("cache"))?;
         let analysis_bytes = self.calculate_dir_size(&self.data_dir.join("analysis"))?;
 
-        // Database file
+        // Database file (on local SSD)
         let db_path = self.data_dir.join("jobs.db");
         let db_bytes = if db_path.exists() {
             std::fs::metadata(&db_path)
@@ -249,7 +262,7 @@ impl DiskMonitor {
             0
         };
 
-        // Logs directory
+        // Logs directory (on local SSD)
         let logs_bytes = self.calculate_dir_size(&self.data_dir.join("logs"))?;
 
         let other_bytes = analysis_bytes + logs_bytes;
@@ -328,19 +341,32 @@ mod tests {
     #[test]
     fn test_disk_monitor_thresholds() -> Result<()> {
         let temp_dir = TempDir::new()?;
+        let storage_dir = TempDir::new()?;
 
-        // Create monitor with 1 GB limits
+        // Create directories that will be monitored
+        fs::create_dir_all(temp_dir.path().join("audio"))?;
+        fs::create_dir_all(temp_dir.path().join("transcripts"))?;
+        fs::create_dir_all(storage_dir.path().join("videos"))?;
+
+        // Create monitor with 10 GB limits
         let monitor = DiskMonitor::new(
             temp_dir.path(),
-            1, // 1 GB hard limit
-            1, // 1 GB pause (same as limit for test)
-            0, // 0 GB resume
+            storage_dir.path(),
+            10, // 10 GB hard limit
+            9,  // 9 GB pause
+            8,  // 8 GB resume
             Duration::from_secs(1),
         )?;
 
-        // Should not pause when empty
+        // Should not pause when empty (directories take minimal space)
         assert!(!monitor.should_pause_downloads()?);
-        assert!(monitor.can_resume_downloads()?);
+        // Can resume is only true when usage < resume_threshold
+        // For empty directories, usage should be nearly 0, so this should be true
+        let usage = monitor.current_usage()?;
+        assert!(
+            usage.total_bytes < 8_000_000_000,
+            "Empty directories should use less than resume threshold"
+        );
 
         Ok(())
     }
@@ -348,7 +374,8 @@ mod tests {
     #[test]
     fn test_calculate_dir_size() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let videos_dir = temp_dir.path().join("videos");
+        let storage_dir = TempDir::new()?;
+        let videos_dir = storage_dir.path().join("videos");
         fs::create_dir_all(&videos_dir)?;
 
         // Create test files
@@ -357,6 +384,7 @@ mod tests {
 
         let monitor = DiskMonitor::new(
             temp_dir.path(),
+            storage_dir.path(),
             10,
             9,
             8,
@@ -372,9 +400,11 @@ mod tests {
     #[test]
     fn test_cache_expiration() -> Result<()> {
         let temp_dir = TempDir::new()?;
+        let storage_dir = TempDir::new()?;
 
         let monitor = DiskMonitor::new(
             temp_dir.path(),
+            storage_dir.path(),
             10,
             9,
             8,

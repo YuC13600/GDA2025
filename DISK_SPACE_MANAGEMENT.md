@@ -69,14 +69,25 @@ queued → downloading → downloaded → transcribing → transcribed → ...
 
 ```rust
 pub struct DiskMonitor {
-    data_dir: PathBuf,
+    data_dir: PathBuf,    // Local SSD: audio, transcripts, cache, db
+    storage_dir: PathBuf, // External HDD: videos
     hard_limit: u64,      // 300 GB
     pause_threshold: u64,  // 280 GB
     resume_threshold: u64, // 250 GB
 }
 
 impl DiskMonitor {
-    /// Get current disk usage for the data directory
+    /// Create monitor with dual-path support (local SSD + external HDD)
+    pub fn new(
+        data_dir: impl AsRef<Path>,
+        storage_dir: impl AsRef<Path>,
+        hard_limit_gb: u64,
+        pause_threshold_gb: u64,
+        resume_threshold_gb: u64,
+        cache_duration: Duration,
+    ) -> Result<Self>;
+
+    /// Get current disk usage across both directories
     pub fn current_usage(&self) -> Result<DiskUsage>;
 
     /// Check if downloads should be paused
@@ -91,12 +102,12 @@ impl DiskMonitor {
 
 pub struct DiskUsage {
     pub total_bytes: u64,
-    pub videos_bytes: u64,
-    pub audio_bytes: u64,
-    pub transcripts_bytes: u64,
-    pub tokens_bytes: u64,
-    pub cache_bytes: u64,
-    pub db_bytes: u64,
+    pub videos_bytes: u64,      // From storage_dir
+    pub audio_bytes: u64,       // From data_dir
+    pub transcripts_bytes: u64, // From data_dir
+    pub tokens_bytes: u64,      // From data_dir
+    pub cache_bytes: u64,       // From data_dir
+    pub db_bytes: u64,          // From data_dir
 }
 
 pub struct SpaceBreakdown {
@@ -108,10 +119,16 @@ pub struct SpaceBreakdown {
 ```
 
 **Implementation**:
+- **Dual-path monitoring**: Videos on external HDD, everything else on local SSD
 - Use `fs::metadata()` to get file sizes
-- Walk through `data/videos/`, `data/audio/`, etc.
+- Walk through directories recursively to calculate total size
 - Cache results for 5 seconds to avoid excessive I/O
-- Use `statvfs` (Linux) or equivalent for filesystem stats
+- Monitors:
+  - `storage_dir/videos/` - External HDD (large temporary files)
+  - `data_dir/audio/` - Local SSD (temporary files)
+  - `data_dir/transcripts/` - Local SSD (permanent files)
+  - `data_dir/cache/` - Local SSD (permanent files)
+  - `data_dir/jobs.db` - Local SSD (database)
 
 ### 2. Downloader Behavior
 
@@ -358,7 +375,21 @@ INFO  Current disk usage: 198/250 GB (79%)
 4. **Incremental Cleanup**: Delete every N minutes instead of per-file
 5. **Compression**: Compress transcripts on-the-fly (save ~50% space)
 
+## Implementation Notes
+
+### Dual-Path Storage Fix (2025-11-13)
+
+**Issue**: Initial implementation monitored only `data_dir`, missing the videos on `storage_dir` (external HDD), causing monitoring to report 4KB instead of 407GB actual usage.
+
+**Fix Applied**:
+- Updated `DiskMonitor::new()` to accept both `data_dir` and `storage_dir` parameters
+- Modified `calculate_usage()` to read videos from `storage_dir/videos/`
+- Updated both `anime-downloader` and `transcriber` to pass correct paths
+- Result: Now correctly monitors 437GB total (436.6GB videos + 0.4GB other files)
+
+**Testing**: All unit tests pass, dry-run confirmed correct disk usage detection.
+
 ---
 
-**Status**: Design complete, ready for implementation
-**Last updated**: 2025-11-10
+**Status**: Implemented and operational (as of Phase 4-5)
+**Last updated**: 2025-11-13

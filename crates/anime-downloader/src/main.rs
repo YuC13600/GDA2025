@@ -83,9 +83,10 @@ async fn main() -> Result<()> {
     let database = Database::open(&db_path).context("Failed to open database")?;
     let job_queue = JobQueue::new(database);
 
-    // Initialize disk monitor
+    // Initialize disk monitor (monitors both local SSD and external HDD)
     let disk_monitor = DiskMonitor::new(
         config.data_dir(),
+        config.storage_dir(),
         config.disk_management.hard_limit_gb,
         config.disk_management.pause_threshold_gb,
         config.disk_management.resume_threshold_gb,

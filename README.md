@@ -31,8 +31,8 @@ A research project investigating **Zipf's law** in media content by analyzing wo
 | 1 | Project Infrastructure | ✅ Complete | 100% |
 | 2 | MAL Scraper | ✅ Complete | 100% |
 | 3 | Anime Selector (Claude AI) | ✅ Complete | 100% |
-| 4 | Anime Downloader | 🔄 Running | 0.16% (274/172,066) |
-| 5 | Transcriber (Whisper) | 🔄 Running | 0.01% (25/172,066) |
+| 4 | Anime Downloader | 🔄 Running | ~1.5% (~2,000/172,066) |
+| 5 | Transcriber (Whisper) | 🔄 Running | Ongoing |
 | 6 | Tokenizer | ⏳ Planned | 0% |
 | 7 | Statistical Analyzer | ⏳ Planned | 0% |
 | 8 | TUI Monitor | ⏳ Planned | 0% |
@@ -43,10 +43,10 @@ A research project investigating **Zipf's law** in media content by analyzing wo
 - **Anime Discovered**: 13,391 unique anime across 130+ categories
 - **Episode Jobs**: 172,066 total episodes to process
 - **AI Selection Success**: 60% high confidence, 9% medium, 2% low
-- **Downloaded**: 274 episodes (~0.16%)
-- **Transcribed**: 25 episodes (~0.01%)
+- **Downloaded**: ~2,000+ episodes (ongoing)
+- **Transcribed**: Ongoing transcription with aggressive cleanup
 - **Database Size**: 49 MB (SQLite)
-- **Transcript Data**: ~140 KB (7 anime completed)
+- **Storage**: 437 GB total (436.6 GB videos, properly monitored as of 2025-11-13)
 
 ## Features
 
